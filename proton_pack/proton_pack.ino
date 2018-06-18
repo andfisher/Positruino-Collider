@@ -8,13 +8,17 @@ Adafruit_NeoPixel strip = Adafruit_NeoPixel(STRIP_N, STRIP_PIN, NEO_GRB + NEO_KH
 bool invert;
 bool hasBooted;
 bool justBooted;
+bool isShuttingDown;
 bool power_switch;
 
 unsigned long bootStartTime;
+unsigned long shutdownStartTime;
 
 uint32_t neopixel_white;
 uint32_t neopixel_black;
 uint32_t neopixel_red;
+uint32_t neopixel_blue;
+uint32_t neopixel_green;
 
 int powerBootStripMax;
 int powerLEDIndex;
@@ -98,6 +102,23 @@ void powerCellCycle(long currentTime, bool _init) {
     strip.show();
 }
 
+bool powerCellShutdown(long currentTime, long startTime) {
+
+  long duration = 1500.0;
+  int difference = currentTime - startTime;
+  float ratio = (float) difference / duration;
+  int n = 255.0 - (255.0 * ratio);
+  uint32_t color = strip.Color(n, n, n); 
+  
+  for(uint32_t i = 0; i < STRIP_N; i++) {
+    strip.setPixelColor(i, color);
+  }
+  strip.show();
+
+  return n > 0;
+}
+
+
 // Fill the dots one after the other with a color
 void lightStripLED(uint32_t n, uint32_t color) {
     strip.setPixelColor(n, color);
@@ -117,8 +138,10 @@ void setup() {
   strip.begin();
   strip.show(); // Initialize all pixels to 'off'
 
-  neopixel_red = strip.Color(255, 0, 0); 
-  neopixel_white = strip.Color(0, 0, 255); 
+  neopixel_red = strip.Color(255, 0, 0);
+  neopixel_green = strip.Color(0, 255, 0);
+  neopixel_blue = strip.Color(0, 0, 255);
+  neopixel_white = strip.Color(255, 255, 255); 
   neopixel_black = strip.Color(0, 0, 0); // off
 }
 
@@ -149,8 +172,16 @@ void loop() {
     }
 
   } else {
-    power_switch = false;
-    hasBooted = false;
+    if (power_switch) {
+      shutdownStartTime = currentTime;
+      isShuttingDown = true;
+      power_switch = false;
+      hasBooted = false;
+    }
+
+    if (isShuttingDown) {
+      isShuttingDown = powerCellShutdown(currentTime, shutdownStartTime);
+    }
     // @TODO
     // power down
   }
