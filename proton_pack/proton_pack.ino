@@ -73,11 +73,11 @@ int bgPins[15] = {
 
 And_NeutrinoWandBarGraph bargraph = And_NeutrinoWandBarGraph();
 
-/** 
- * 11-character file name (8.3 without the dot).
- * If the filename is shorter than 8 characters, fill the characters
- * @see https://learn.adafruit.com/adafruit-audio-fx-sound-board/serial-audio-control
- */
+/**
+   11-character file name (8.3 without the dot).
+   If the filename is shorter than 8 characters, fill the characters
+   @see https://learn.adafruit.com/adafruit-audio-fx-sound-board/serial-audio-control
+*/
 char packBootTrack[]      = "T00     WAV";
 char packHumTrack[]       = "T01     WAV";
 char fireStartTrack[]     = "T02     WAV";
@@ -131,18 +131,20 @@ int powerBootStripMax;
 int powerLEDIndex;
 unsigned long powerNextTimeToUpdate;
 
+unsigned long timeActivateStart;
+
 void resetStripLED() {
-    for (uint32_t i = 0; i < STRIP_N; i++) {
-        strip.setPixelColor(i, neopixel_black);
-    }
-    strip.show();
+  for (uint32_t i = 0; i < STRIP_N; i++) {
+    strip.setPixelColor(i, neopixel_black);
+  }
+  strip.show();
 }
 
 bool powerBootUpSequence(long currentTime, long startTime) {
 
   int _speed = 30.0;
   int inverse;
-  
+
   if (currentTime == startTime) {
     powerBootStripMax = STRIP_N;
     resetStripLED();
@@ -162,16 +164,16 @@ bool powerBootUpSequence(long currentTime, long startTime) {
     powerNextTimeToUpdate = currentTime + _speed;
   }
 
-   for(uint32_t i = 0; i < STRIP_N; i++) {
+  for (uint32_t i = 0; i < STRIP_N; i++) {
 
-    inverse = (STRIP_N - i) -1;
-      
+    inverse = (STRIP_N - i) - 1;
+
     if (i == powerLEDIndex || i >= powerBootStripMax) {
       strip.setPixelColor(inverse, neopixel_white);
     } else {
-     strip.setPixelColor(inverse, neopixel_black);
+      strip.setPixelColor(inverse, neopixel_black);
     }
-    
+
   }
   strip.show();
 
@@ -185,7 +187,7 @@ bool powerBootUpSequence(long currentTime, long startTime) {
 void powerCellCycle(long currentTime, bool _init) {
 
   int _speed = 30.0;
-  
+
   if (_init) {
     powerLEDIndex = STRIP_N;
     powerNextTimeToUpdate = currentTime + _speed;
@@ -200,16 +202,16 @@ void powerCellCycle(long currentTime, bool _init) {
     powerNextTimeToUpdate = currentTime + _speed;
   }
 
-   for(uint32_t i = 0; i < STRIP_N; i++) {
-      
-      if (i <= powerLEDIndex) {
-        strip.setPixelColor(i, neopixel_white);
-      } else {
-       strip.setPixelColor(i, neopixel_black);
-      }
-    
+  for (uint32_t i = 0; i < STRIP_N; i++) {
+
+    if (i <= powerLEDIndex) {
+      strip.setPixelColor(i, neopixel_white);
+    } else {
+      strip.setPixelColor(i, neopixel_black);
     }
-    strip.show();
+
+  }
+  strip.show();
 }
 
 bool powerCellShutdown(long currentTime, long startTime) {
@@ -218,9 +220,9 @@ bool powerCellShutdown(long currentTime, long startTime) {
   int difference = currentTime - startTime;
   float ratio = (float) difference / duration;
   int n = 255.0 - (255.0 * ratio);
-  uint32_t color = strip.Color(n, n, n); 
-  
-  for(uint32_t i = 0; i < STRIP_N; i++) {
+  uint32_t color = strip.Color(n, n, n);
+
+  for (uint32_t i = 0; i < STRIP_N; i++) {
     strip.setPixelColor(i, color);
   }
   strip.show();
@@ -233,8 +235,8 @@ bool powerCellShutdown(long currentTime, long startTime) {
 
 // Fill the dots one after the other with a color
 void lightStripLED(uint32_t n, uint32_t color) {
-    strip.setPixelColor(n, color);
-    strip.show();
+  strip.setPixelColor(n, color);
+  strip.show();
 }
 
 void setup() {
@@ -246,29 +248,31 @@ void setup() {
 
   pinMode(ACTIVATE_BTN, INPUT_PULLUP);
   digitalWrite(ACTIVATE_BTN, HIGH);
-  
+
   pinMode(INTENSIFY_BTN, INPUT_PULLUP);
   digitalWrite(INTENSIFY_BTN, HIGH);
-  
+
   pinMode(MODE_BTN, INPUT_PULLUP);
   digitalWrite(MODE_BTN, HIGH);
 
   pinMode(ACT, INPUT);
 
   if (! bargraphPinsIO.begin(SX1509_ADDRESS)) {
-//    // If we failed to communicate, turn the pin 13 LED on
-//    //while (1)
-//    //  ; // And loop forever.
+    //    // If we failed to communicate, turn the pin 13 LED on
+    //    //while (1)
+    //    //  ; // And loop forever.
   }
-  
-  bargraph.init(bargraphPinsIO, bgPins, sizeof(bgPins)/sizeof(int));
+
+  bargraph.init(bargraphPinsIO, bgPins, sizeof(bgPins) / sizeof(int));
+  bargraph.setPowerLevel(3);
+  bargraph.setSpeed(And_NeutrinoWandBarGraph::SPEED_NOMINAL);
 
   power_switch = false;
   activate_switch = false;
   intensify_switch = false;
   mode_switch = false;
   lever_switch = false;
-  
+
   hasBooted = false;
 
   strip.begin();
@@ -277,7 +281,7 @@ void setup() {
   neopixel_red = strip.Color(255, 0, 0);
   neopixel_green = strip.Color(0, 255, 0);
   neopixel_blue = strip.Color(0, 0, 255);
-  neopixel_white = strip.Color(255, 255, 255); 
+  neopixel_white = strip.Color(255, 255, 255);
   neopixel_black = strip.Color(0, 0, 0); // off
 }
 
@@ -290,32 +294,61 @@ void playSoundEffect(char* track, bool _stop) {
   if (_stop) {
     sfx.stop();
   }
-  
+
   sfx.playTrack(track);
 }
 
 void cyclotronAnimate(int in, int out) {
 
-//  switch (in) {
-//    case 0:
-//    break;
-//  }
-  
+  //  switch (in) {
+  //    case 0:
+  //    break;
+  //  }
+
 }
 
 void cyclotronLight(int i, int r, int g, int b) {
-  
+
 }
 
 void loop() {
   // put your main code here, to run repeatedly:
   unsigned long currentTime = millis();
+  unsigned long firingPeriod;
 
+  // And_NeutrinoWandBarGraph is smart enough to know that it only
+  // needs to begin() once, so it is safe here in loop().
   bargraph.begin(currentTime);
-  bargraph.setPowerLevel(3);
-  bargraph.setSpeed(And_NeutrinoWandBarGraph::SPEED_MINIMAL);
-  bargraph.idle(currentTime);
 
+  if (switchOn(ACTIVATE_BTN)) {
+    if (! activate_switch) {
+      timeActivateStart = currentTime;
+      activate_switch = true;
+    }
+
+    firingPeriod = (currentTime - timeActivateStart);
+
+    /**
+       @todo
+       Add a "venting" sequence to the bargraph?
+    */
+
+    if (firingPeriod > 5000 && firingPeriod < 10999) {
+      bargraph.setSpeed(And_NeutrinoWandBarGraph::SPEED_NOMINAL);
+    } else if (firingPeriod > 11000 && firingPeriod < 19999) {
+      bargraph.setSpeed(And_NeutrinoWandBarGraph::SPEED_SEMINAL);
+    } else if (firingPeriod > 20000) {
+      bargraph.setSpeed(And_NeutrinoWandBarGraph::SPEED_EXTREME);
+    } else {
+      bargraph.setSpeed(And_NeutrinoWandBarGraph::SPEED_MINIMAL);
+    }
+
+    bargraph.activate(currentTime);
+  } else {
+    activate_switch = false;
+    bargraph.setSpeed(And_NeutrinoWandBarGraph::SPEED_IDLE);
+    bargraph.idle(currentTime);
+  }
 
   if (switchOn(POWER_BTN)) {
 
@@ -336,14 +369,14 @@ void loop() {
           cyclotron3.setColor(255, 0, 0);
           break;
       }
-      
+
     } else {
 
       if (! power_switch) {
         bootStartTime = currentTime;
         power_switch = true;
       }
-      
+
       hasBooted = powerBootUpSequence(currentTime, bootStartTime);
 
       if (hasBooted) {
