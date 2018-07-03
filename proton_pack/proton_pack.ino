@@ -1,5 +1,12 @@
-#include <And_RGBLed.h>
+
+#include <Wire.h> // Include the I2C library (required)
+#include <SoftwareSerial.h>
+#include <SparkFun_Tlc5940.h>
+#include <SparkFunSX1509.h>
 #include <Adafruit_NeoPixel.h>
+#include <Adafruit_Soundboard.h>
+#include <And_NeutrinoWandBarGraph.h>
+#include <And_RGBLed.h>
 
 #define POWER_BTN 52
 #define ACTIVATE_BTN 53
@@ -8,6 +15,27 @@
 #define LEVER_BTN 56
 #define STRIP_N 16
 #define STRIP_PIN 22
+
+const int SX1509_BG_LED_1 = 0;
+const int SX1509_BG_LED_2 = 1;
+const int SX1509_BG_LED_3 = 2;
+const int SX1509_BG_LED_4 = 3;
+const int SX1509_BG_LED_5 = 4;
+const int SX1509_BG_LED_6 = 5;
+const int SX1509_BG_LED_7 = 6;
+const int SX1509_BG_LED_8 = 7;
+const int SX1509_BG_LED_9 = 8;
+const int SX1509_BG_LED_10 = 9;
+const int SX1509_BG_LED_11 = 10;
+const int SX1509_BG_LED_12 = 11;
+const int SX1509_BG_LED_13 = 12;
+const int SX1509_BG_LED_14 = 13;
+const int SX1509_BG_LED_15 = 14;
+
+#define ACT 57
+#define SFX_RST 4
+#define SFX_TX 5
+#define SFX_RX 6
 
 #define PACK_MODE_STREAM 1
 #define PACK_MODE_STASIS 2
@@ -30,6 +58,46 @@
 #define CYCLOTRON_3_PIN_B 1
 
 Adafruit_NeoPixel strip = Adafruit_NeoPixel(STRIP_N, STRIP_PIN, NEO_GRB + NEO_KHZ800);
+
+SoftwareSerial ss = SoftwareSerial(SFX_TX, SFX_RX);
+Adafruit_Soundboard sfx = Adafruit_Soundboard(&ss, NULL, SFX_RST);
+
+const byte SX1509_ADDRESS = 0x3E;
+SX1509 bargraphPinsIO;
+
+int bgPins[15] = {
+  SX1509_BG_LED_1, SX1509_BG_LED_2, SX1509_BG_LED_3, SX1509_BG_LED_4, SX1509_BG_LED_5,
+  SX1509_BG_LED_6, SX1509_BG_LED_7, SX1509_BG_LED_8, SX1509_BG_LED_9, SX1509_BG_LED_10,
+  SX1509_BG_LED_11, SX1509_BG_LED_12, SX1509_BG_LED_13, SX1509_BG_LED_14, SX1509_BG_LED_15,
+};
+
+And_NeutrinoWandBarGraph bargraph = And_NeutrinoWandBarGraph();
+
+/** 
+ * 11-character file name (8.3 without the dot).
+ * If the filename is shorter than 8 characters, fill the characters
+ * @see https://learn.adafruit.com/adafruit-audio-fx-sound-board/serial-audio-control
+ */
+char packBootTrack[]      = "T00     WAV";
+char packHumTrack[]       = "T01     WAV";
+char fireStartTrack[]     = "T02     WAV";
+char fireStart2Track[]    = "T12     WAV";
+char fireStart3Track[]    = "T13     WAV";
+char fireLoopTrack[]      = "T03     WAV";
+char fireEndTrack[]       = "T04     WAV";
+char fireEndTrack2[]      = "T11     WAV";
+char stasisStartTrack[]   = "T05     WAV";
+char stasisLoopTrack[]    = "T06     WAV";
+char stasisEndTrack[]     = "T07     WAV";
+char slimeStartTrack[]    = "T08     WAV";
+char slimeLoopTrack[]     = "T09     WAV";
+char slimeEndTrack[]      = "T10     WAV";
+char modeSwitchTrack[]    = "T14     WAV";
+char maxFireStartTrack[]  = "T15     WAV";
+char maxFireLoopTrack[]   = "T16     WAV";
+char maxFireEndTrack[]    = "T17     WAV";
+char shutdownTrack[]      = "T18     WAV";
+char powerOffTrack[]      = "T19     WAV";
 
 bool invert;
 bool hasBooted;
@@ -80,6 +148,9 @@ bool powerBootUpSequence(long currentTime, long startTime) {
     resetStripLED();
     powerLEDIndex = 0;
     powerNextTimeToUpdate = currentTime + _speed;
+
+    playSoundEffect(packBootTrack, true);
+
     return false;
   }
 
@@ -170,36 +241,33 @@ void setup() {
   // put your setup code here, to run once:
   Serial.begin(9600);
 
-  pinMode(POWER_BTN, INPUT);
+  pinMode(POWER_BTN, INPUT_PULLUP);
   digitalWrite(POWER_BTN, HIGH);
 
-  pinMode(ACTIVATE_BTN, INPUT);
+  pinMode(ACTIVATE_BTN, INPUT_PULLUP);
   digitalWrite(ACTIVATE_BTN, HIGH);
   
-  pinMode(INTENSIFY_BTN, INPUT);
+  pinMode(INTENSIFY_BTN, INPUT_PULLUP);
   digitalWrite(INTENSIFY_BTN, HIGH);
   
-  pinMode(MODE_BTN, INPUT);
+  pinMode(MODE_BTN, INPUT_PULLUP);
   digitalWrite(MODE_BTN, HIGH);
+
+  pinMode(ACT, INPUT);
+
+  if (! bargraphPinsIO.begin(SX1509_ADDRESS)) {
+//    // If we failed to communicate, turn the pin 13 LED on
+//    //while (1)
+//    //  ; // And loop forever.
+  }
+  
+  bargraph.init(bargraphPinsIO, bgPins, sizeof(bgPins)/sizeof(int));
 
   power_switch = false;
   activate_switch = false;
   intensify_switch = false;
   mode_switch = false;
   lever_switch = false;
-
-  pinMode(CYCLOTRON_0_PIN_R, OUTPUT);
-  pinMode(CYCLOTRON_0_PIN_G, OUTPUT);
-  pinMode(CYCLOTRON_0_PIN_B, OUTPUT);
-  pinMode(CYCLOTRON_1_PIN_R, OUTPUT);
-  pinMode(CYCLOTRON_1_PIN_G, OUTPUT);
-  pinMode(CYCLOTRON_1_PIN_B, OUTPUT);
-  pinMode(CYCLOTRON_2_PIN_R, OUTPUT);
-  pinMode(CYCLOTRON_2_PIN_G, OUTPUT);
-  pinMode(CYCLOTRON_2_PIN_B, OUTPUT);
-  pinMode(CYCLOTRON_3_PIN_R, OUTPUT);
-  pinMode(CYCLOTRON_3_PIN_G, OUTPUT);
-  pinMode(CYCLOTRON_3_PIN_B, OUTPUT);
   
   hasBooted = false;
 
@@ -215,6 +283,15 @@ void setup() {
 
 bool switchOn(int _switch) {
   return digitalRead(_switch) == 0;
+}
+
+void playSoundEffect(char* track, bool _stop) {
+
+  if (_stop) {
+    sfx.stop();
+  }
+  
+  sfx.playTrack(track);
 }
 
 void cyclotronAnimate(int in, int out) {
@@ -233,6 +310,12 @@ void cyclotronLight(int i, int r, int g, int b) {
 void loop() {
   // put your main code here, to run repeatedly:
   unsigned long currentTime = millis();
+
+  bargraph.begin(currentTime);
+  bargraph.setPowerLevel(3);
+  bargraph.setSpeed(And_NeutrinoWandBarGraph::SPEED_MINIMAL);
+  bargraph.idle(currentTime);
+
 
   if (switchOn(POWER_BTN)) {
 
