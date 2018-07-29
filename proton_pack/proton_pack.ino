@@ -31,7 +31,7 @@
 #define PROTON_MODE 0
 #define SLIME_MODE 1
 #define STASIS_MODE 2
-#define PROTON_MAX_MODE 3
+#define MAX_PROTON_MODE 3
 
 /**
  * The N-Filter vent consists of a 12V fan,
@@ -167,6 +167,8 @@ char maxFireEndTrack[]    = "T17     WAV";
 char shutdownTrack[]      = "T18     WAV";
 char powerOffTrack[]      = "T19     WAV";
 
+int packFiringMode;
+
 /**
  * @desc Return a randomised named Stream Start track
  *       from the list available.
@@ -181,6 +183,16 @@ char* getRandomStreamStartTrack(){
     default: // 0, because random()'s MAX is exclusive
       return fireStartTrack;
   }
+}
+
+/**
+ * @desc Return a randomised named Stream Loop track
+ *       from the list available.
+ */
+char* getRandomStreamTrack(){
+  // @TODO:
+  // Currently only using one fireLoop SFX
+  return fireLoopTrack;
 }
 
 /**
@@ -216,7 +228,7 @@ void openFiringStream(long timeSinceStart) {
       case STASIS_MODE:
         playSoundEffect(stasisStartTrack, true);
         break;
-      case PROTON_MAX_MODE:
+      case MAX_PROTON_MODE:
         playSoundEffect(maxFireStartTrack, true);
         break;
       default: // PROTON MODE
@@ -244,7 +256,7 @@ void openFiringStream(long timeSinceStart) {
         case MAX_PROTON_MODE:
           playSoundEffect(maxFireLoopTrack, true);
           break;
-        case default:
+        default:
           /**
            * Any of the stream loops should seamlessly loop
            * with any other, so we don't need to keep track
@@ -285,8 +297,6 @@ And_RGBLed cyclotron2 = And_RGBLed(AND_COMMON_ANODE, CYCLOTRON_2_PIN_R, CYCLOTRO
 And_RGBLed cyclotron3 = And_RGBLed(AND_COMMON_ANODE, CYCLOTRON_3_PIN_R, CYCLOTRON_3_PIN_G, CYCLOTRON_3_PIN_B);
 
 int currentCyclotronLight = 0;
-
-int packFiringMode;
 int powerBootStripMax;
 int powerLEDIndex;
 unsigned long powerNextTimeToUpdate;
