@@ -23,6 +23,17 @@
 #define STRIP_PIN 22
 
 /**
+ * Pack Modes, inspired by the Video Game:
+ * Default (Proton) stream, Stasis stream, Slime blower
+ * and Maximum Proton stream (use for crossing the
+ * streams?)
+ */
+#define PROTON_MODE 0
+#define SLIME_MODE 1
+#define STASIS_MODE 2
+#define PROTON_MAX_MODE 3
+
+/**
  * The N-Filter vent consists of a 12V fan,
  * a 12V multi-directional LED lamp, and a
  * 9-12V e-cig kit. These are switched via
@@ -33,7 +44,7 @@
  * the light + fan?
  */
 #define NFILTER_FAN 46
-#define NFILTER_SMOKE 47
+#define NFILTER_VENT_EXHAUST 47
 
 
 #define TIP_EXTEND_DIR 11
@@ -166,7 +177,7 @@ char powerOffTrack[]      = "T19     WAV";
 
 /**
  * @desc Return a randomised named Stream Start track
- *       from the list availbale.
+ *       from the list available.
  */
 char* getRandomStreamStartTrack(){
   int r = random(0, 3);
@@ -182,7 +193,7 @@ char* getRandomStreamStartTrack(){
 
 /**
  * @desc Return a randomised named Stream End track
- *       from the list availbale.
+ *       from the list available.
  */
 char* getRandomStreamEndTrack(){
   int r = random(0, 2);
@@ -194,7 +205,12 @@ char* getRandomStreamEndTrack(){
   }
 }
 
-
+/**
+ * @desc Function to call to open a firing stream. Will
+ *       always take into consideration the pack's
+ *       current Firing Mode and play the appropriate
+ *       sound effect.
+ */
 void openFiringStream(long timeSinceStart) {
 
   long now = millis();
@@ -294,6 +310,14 @@ void resetStripLED() {
   strip.show();
 }
 
+/**
+ * @desc During the boot sequence the animation of the
+ *       power strip is different. Each LED will "fall"
+ *       from one end to the other, producing a filling
+ *       stack effect.
+ * @return bool Returns TRUE once the full animation is
+ *       complete, otherwise FALSE.
+ */
 bool powerBootUpSequence(long currentTime, long startTime) {
 
   int _speed = 30.0;
@@ -336,6 +360,11 @@ bool powerBootUpSequence(long currentTime, long startTime) {
   return powerBootStripMax <= 1;
 }
 
+/**
+ * @desc During a power cell cycle, each light will light
+ *       in a chase until all LEDs are lit, then they
+ *       are immediately all reset to OFF.
+ */
 void powerCellCycle(long currentTime, bool _init) {\
 
   int _speed = 30.0;
@@ -366,6 +395,14 @@ void powerCellCycle(long currentTime, bool _init) {\
   strip.show();
 }
 
+/**
+ * @desc On power down, the animation on the 16 LED
+ *       NeoPixel strip is thus:
+ *       All lights are lit at once, and then all
+ *       fade to off over the duration variable.
+ * @return bool Returns TRUE once the animation is complete,
+ *       otherwise FALSE.
+ */
 bool powerCellShutdown(long currentTime, long startTime) {
 
   long duration = 1500.0;
@@ -385,14 +422,21 @@ bool powerCellShutdown(long currentTime, long startTime) {
 
 
 
-// Fill the dots one after the other with a color
+/** 
+ * @desc Fill the dots one after the other with a color
+ * @deprecated?
+ */
 void lightStripLED(uint32_t n, uint32_t color) {
   strip.setPixelColor(n, color);
   strip.show();
 }
 
+/**
+ * @desc Reset the states of the N-Filter I/O
+ */
 void NFilterReset() {
   digitalWrite(NFILTER_FAN, HIGH);
+  digitalWrite(NFILTER_VENT_EXHAUST, HIGH);
 }
 
 void setup() {
@@ -411,6 +455,7 @@ void setup() {
   soundTest = 1;
 
   pinMode(NFILTER_FAN, OUTPUT);
+  pinMode(NFILTER_VENT_EXHAUST, OUTPUT);
   NFilterReset();
 
   pinMode(POWER_BTN, INPUT_PULLUP);
@@ -487,16 +532,11 @@ void playSoundEffect(char* track, bool _stop) {
 }
 
 void cyclotronAnimate(int in, int out) {
-
-  //  switch (in) {
-  //    case 0:
-  //    break;
-  //  }
-
+  // @TODO
 }
 
 void cyclotronLight(int i, int r, int g, int b) {
-
+  // @TODO
 }
 
 int extend = 0;
@@ -543,10 +583,11 @@ void loop() {
    */
   bargraph.begin(currentTime);
 
-  //if (switchOn(NFILTER_CRTL)) {
-
   
-
+  /**
+   * Check the switch position of the Activate Button to
+   * see if the Neutrino Wand needs to fire a stream
+   */
   if (switchOn(ACTIVATE_BTN)) {
     if (! activate_switch) {
       timeActivateStart = currentTime;
@@ -583,6 +624,10 @@ void loop() {
   //playSoundEffect(packHumTrack, false);
   //delay(5000);
 
+  /**
+   * Check the position of the Power Button to see if
+   * the Proton Pack is powered
+   */
   if (switchOn(POWER_BTN)) {
 
     if (hasBooted) {
