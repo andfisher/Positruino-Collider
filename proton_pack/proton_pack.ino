@@ -98,14 +98,6 @@ int bgPins[15] = {
 
 And_NeutrinoWandBarGraph bargraph = And_NeutrinoWandBarGraph();
 
-/**
- * The pack will have 3 modes from the Video Game,
- * default stream, stasis stream and slime stream.
- */
-#define PACK_MODE_STREAM 1
-#define PACK_MODE_STASIS 2
-#define PACK_MODE_SLIME 3
-
 #define CYCLOTRON_0_PIN_R 11
 #define CYCLOTRON_0_PIN_G 10
 #define CYCLOTRON_0_PIN_B 9
