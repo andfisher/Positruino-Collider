@@ -1,6 +1,6 @@
-
+#include <AccelStepper.h>
+#include <MultiStepper.h>
 #include <Wire.h> // Include the I2C library (required)
-#include <SoftwareSerial.h>
 #include <SparkFun_Tlc5940.h>
 #include <SparkFunSX1509.h>
 #include <Adafruit_NeoPixel.h>
@@ -8,14 +8,43 @@
 #include <And_NeutrinoWandBarGraph.h>
 #include <And_RGBLed.h>
 
-#define POWER_BTN 52
-#define ACTIVATE_BTN 53
+/**
+ * Connect these I/O pins to GND. Use the
+ * switchOn() method to abstract reading
+ * their state.
+ */
+#define POWER_BTN 32
+#define SAFETY_BTN 31
+#define ACTIVATE_BTN 33
 #define INTENSIFY_BTN 54
 #define MODE_BTN 55
 #define LEVER_BTN 56
 #define STRIP_N 16
 #define STRIP_PIN 22
 
+/**
+ * The N-Filter vent consists of a 12V fan,
+ * a 12V multi-directional LED lamp, and a
+ * 9-12V e-cig kit. These are switched via
+ * a double Relay module.
+ *
+ * @TODO
+ * Should the fan + e-cig be synched, or
+ * the light + fan?
+ */
+#define NFILTER_FAN 46
+#define NFILTER_SMOKE 47
+
+
+#define TIP_EXTEND_DIR 11
+#define TIP_EXTEND_STEP 12
+
+/**
+ * We are using a SparkFun SX1509 breakout
+ * board to drive the Neutrino Wand bargraph,
+ * which is an array of 3 x 5 LED bargraphs
+ * since those are the very readily available.
+ */
 const int SX1509_BG_LED_1 = 0;
 const int SX1509_BG_LED_2 = 1;
 const int SX1509_BG_LED_3 = 2;
@@ -32,11 +61,36 @@ const int SX1509_BG_LED_13 = 12;
 const int SX1509_BG_LED_14 = 13;
 const int SX1509_BG_LED_15 = 14;
 
-#define ACT 57
-#define SFX_RST 4
-#define SFX_TX 5
-#define SFX_RX 6
+//# define ACT 57
+#define SFX_ACT 57
+#define SFX_RST 3
+#define SFX_TX 14
+#define SFX_RX 15
 
+/**
+ * Since SX1509 breakouts can be chained, you need
+ * to set each board's address when communicating
+ * with it. The default for one board in 0x3E.
+ * We'll also load the boards I/O pins into an
+ * array so that we can ass it to our library class
+ * And_NeutrinoWandBarGraph
+ */
+const byte SX1509_ADDRESS = 0x3E;
+
+SX1509 bargraphPinsIO;
+
+int bgPins[15] = {
+  SX1509_BG_LED_1, SX1509_BG_LED_2, SX1509_BG_LED_3, SX1509_BG_LED_4, SX1509_BG_LED_5,
+  SX1509_BG_LED_6, SX1509_BG_LED_7, SX1509_BG_LED_8, SX1509_BG_LED_9, SX1509_BG_LED_10,
+  SX1509_BG_LED_11, SX1509_BG_LED_12, SX1509_BG_LED_13, SX1509_BG_LED_14, SX1509_BG_LED_15,
+};
+
+And_NeutrinoWandBarGraph bargraph = And_NeutrinoWandBarGraph();
+
+/**
+ * The pack will have 3 modes from the Video Game,
+ * default stream, stasis stream and slime stream.
+ */
 #define PACK_MODE_STREAM 1
 #define PACK_MODE_STASIS 2
 #define PACK_MODE_SLIME 3
@@ -57,27 +111,38 @@ const int SX1509_BG_LED_15 = 14;
 #define CYCLOTRON_3_PIN_G 1
 #define CYCLOTRON_3_PIN_B 1
 
+/**
+ * The power strip will be made from two Adafruit
+ * NeoPixel strips chained together.
+ */
 Adafruit_NeoPixel strip = Adafruit_NeoPixel(STRIP_N, STRIP_PIN, NEO_GRB + NEO_KHZ800);
 
-SoftwareSerial ss = SoftwareSerial(SFX_TX, SFX_RX);
-Adafruit_Soundboard sfx = Adafruit_Soundboard(&ss, NULL, SFX_RST);
+/**
+ * Since we are using a Mega, we will use the hardware
+ * Serial1 on pins 18 & 19 to control the Adafruit
+ * Audio FX Soundboard. If your Arduino doesn't have
+ * hardware serial avaiable, you'll have to use the
+ * SoftwareSerial alternative:
+ *
+ * #include <SoftwareSerial.h>
+ * SoftwareSerial ss = SoftwareSerial(SFX_TX, SFX_RX);
+ */
+Adafruit_Soundboard sfx = Adafruit_Soundboard(&Serial1, NULL, SFX_RST);
 
-const byte SX1509_ADDRESS = 0x3E;
-SX1509 bargraphPinsIO;
-
-int bgPins[15] = {
-  SX1509_BG_LED_1, SX1509_BG_LED_2, SX1509_BG_LED_3, SX1509_BG_LED_4, SX1509_BG_LED_5,
-  SX1509_BG_LED_6, SX1509_BG_LED_7, SX1509_BG_LED_8, SX1509_BG_LED_9, SX1509_BG_LED_10,
-  SX1509_BG_LED_11, SX1509_BG_LED_12, SX1509_BG_LED_13, SX1509_BG_LED_14, SX1509_BG_LED_15,
-};
-
-And_NeutrinoWandBarGraph bargraph = And_NeutrinoWandBarGraph();
+AccelStepper stepper = AccelStepper(AccelStepper::DRIVER, TIP_EXTEND_STEP, TIP_EXTEND_DIR);
 
 /**
-   11-character file name (8.3 without the dot).
-   If the filename is shorter than 8 characters, fill the characters
-   @see https://learn.adafruit.com/adafruit-audio-fx-sound-board/serial-audio-control
-*/
+ * 11-character file name (8.3 without the dot).
+ * If the filename is shorter than 8 characters,
+ * fill the characters.
+ * @see https://learn.adafruit.com/adafruit-audio-fx-sound-board/serial-audio-control
+ *
+ * Here are the Sound Effect files required,
+ * you'll need a 16Mb Adafruit Audio FX to fit
+ * these many sounds. The SFX themselves can
+ * be sourced from the Video Game. Use .WAV to
+ * minimise the delay from decoding OGG.
+ */
 char packBootTrack[]      = "T00     WAV";
 char packHumTrack[]       = "T01     WAV";
 char fireStartTrack[]     = "T02     WAV";
@@ -85,7 +150,7 @@ char fireStart2Track[]    = "T12     WAV";
 char fireStart3Track[]    = "T13     WAV";
 char fireLoopTrack[]      = "T03     WAV";
 char fireEndTrack[]       = "T04     WAV";
-char fireEndTrack2[]      = "T11     WAV";
+char fireEnd2Track[]      = "T11     WAV";
 char stasisStartTrack[]   = "T05     WAV";
 char stasisLoopTrack[]    = "T06     WAV";
 char stasisEndTrack[]     = "T07     WAV";
@@ -98,6 +163,93 @@ char maxFireLoopTrack[]   = "T16     WAV";
 char maxFireEndTrack[]    = "T17     WAV";
 char shutdownTrack[]      = "T18     WAV";
 char powerOffTrack[]      = "T19     WAV";
+
+/**
+ * @desc Return a randomised named Stream Start track
+ *       from the list availbale.
+ */
+char* getRandomStreamStartTrack(){
+  int r = random(0, 3);
+  switch(r) {
+    case 1:
+      return fireStart2Track;
+    case 2:
+      return fireStart3Track;
+    default: // 0, because random()'s MAX is exclusive
+      return fireStartTrack;
+  }
+}
+
+/**
+ * @desc Return a randomised named Stream End track
+ *       from the list availbale.
+ */
+char* getRandomStreamEndTrack(){
+  int r = random(0, 2);
+  switch(r) {
+    case 1:
+      return fireEnd2Track;
+    default: // 0, because random()'s MAX is exclusive
+      return fireEndTrack;
+  }
+}
+
+
+void openFiringStream(long timeSinceStart) {
+
+  long now = millis();
+  uint32_t remain, total;
+
+  if (millis == now) {
+    switch(packFiringMode) {
+      case SLIME_MODE:
+        playSoundEffect(slimeStartTrack, true);
+        break;
+      case STASIS_MODE:
+        playSoundEffect(stasisStartTrack, true);
+        break;
+      case PROTON_MAX_MODE:
+        playSoundEffect(maxFireStartTrack, true);
+        break;
+      default: // PROTON MODE
+        /**
+         * If we've only just started firing, play a randomised
+         * Stream start up sound effect.
+         */
+        playSoundEffect(getRandomStreamStartTrack(), true);
+    }
+  } else {
+
+    /**
+     * If we are unable to query the play duration, OR
+     * the effect is about to stop, queue up the next
+     * sound effect.
+     */
+    if (! sfx.trackSize(&remain, &total) || total - remain <= 3) {
+      switch(packFiringMode) {
+        case STASIS_MODE:
+          playSoundEffect(stasisLoopTrack, true);
+          break;
+        case SLIME_MODE:
+          playSoundEffect(stasisLoopTrack, true);
+          break;
+        case MAX_PROTON_MODE:
+          playSoundEffect(maxFireLoopTrack, true);
+          break;
+        case default:
+          /**
+           * Any of the stream loops should seamlessly loop
+           * with any other, so we don't need to keep track
+           * of which track is randomly picked. This should
+           * make for a more organic stream effect.
+           */
+          playSoundEffect(getRandomStreamTrack(), false);
+      }
+    }
+  }
+
+}
+
 
 bool invert;
 bool hasBooted;
@@ -126,12 +278,14 @@ And_RGBLed cyclotron3 = And_RGBLed(AND_COMMON_ANODE, CYCLOTRON_3_PIN_R, CYCLOTRO
 
 int currentCyclotronLight = 0;
 
-int packMode;
+int packFiringMode;
 int powerBootStripMax;
 int powerLEDIndex;
 unsigned long powerNextTimeToUpdate;
 
 unsigned long timeActivateStart;
+
+int soundTest = 1;
 
 void resetStripLED() {
   for (uint32_t i = 0; i < STRIP_N; i++) {
@@ -150,8 +304,6 @@ bool powerBootUpSequence(long currentTime, long startTime) {
     resetStripLED();
     powerLEDIndex = 0;
     powerNextTimeToUpdate = currentTime + _speed;
-
-    playSoundEffect(packBootTrack, true);
 
     return false;
   }
@@ -184,7 +336,7 @@ bool powerBootUpSequence(long currentTime, long startTime) {
   return powerBootStripMax <= 1;
 }
 
-void powerCellCycle(long currentTime, bool _init) {
+void powerCellCycle(long currentTime, bool _init) {\
 
   int _speed = 30.0;
 
@@ -239,9 +391,27 @@ void lightStripLED(uint32_t n, uint32_t color) {
   strip.show();
 }
 
+void NFilterReset() {
+  digitalWrite(NFILTER_FAN, HIGH);
+}
+
 void setup() {
   // put your setup code here, to run once:
   Serial.begin(9600);
+
+  // This is essential in communicating with the
+  // Adafruit Audio FX board.
+  Serial1.begin(9600);
+
+  if (!sfx.reset()) {
+  //  Serial.println("SFX board Not found");
+    while (1);
+  }
+
+  soundTest = 1;
+
+  pinMode(NFILTER_FAN, OUTPUT);
+  NFilterReset();
 
   pinMode(POWER_BTN, INPUT_PULLUP);
   digitalWrite(POWER_BTN, HIGH);
@@ -255,7 +425,23 @@ void setup() {
   pinMode(MODE_BTN, INPUT_PULLUP);
   digitalWrite(MODE_BTN, HIGH);
 
-  pinMode(ACT, INPUT);
+
+  pinMode(TIP_EXTEND_STEP, OUTPUT);
+  pinMode(TIP_EXTEND_DIR, OUTPUT);
+  //digitalWrite(TIP_EXTEND_DIR, LOW);
+  digitalWrite(TIP_EXTEND_DIR, HIGH);
+
+  Tlc.init();
+
+/*
+  stepper.setMaxSpeed(1000);
+  stepper.setSpeed(50);
+  //stepper.moveTo(5000);
+*/
+//  pinMode(ACT, INPUT);
+
+  //pinMode(SFX_RST, OUTPUT);
+ //digitalWrite(SFX_RST, LOW);
 
   if (! bargraphPinsIO.begin(SX1509_ADDRESS)) {
     //    // If we failed to communicate, turn the pin 13 LED on
@@ -295,7 +481,9 @@ void playSoundEffect(char* track, bool _stop) {
     sfx.stop();
   }
 
-  sfx.playTrack(track);
+  if (sfx.playTrack(track)) {
+    sfx.unpause();
+  }
 }
 
 void cyclotronAnimate(int in, int out) {
@@ -311,14 +499,53 @@ void cyclotronLight(int i, int r, int g, int b) {
 
 }
 
+int extend = 0;
+
 void loop() {
   // put your main code here, to run repeatedly:
   unsigned long currentTime = millis();
   unsigned long firingPeriod;
 
-  // And_NeutrinoWandBarGraph is smart enough to know that it only
-  // needs to begin() once, so it is safe here in loop().
+// if (xxx >= 4095) {
+//  xxx = 0;
+// }
+//xxx = 4095;
+// Tlc.clear();
+// Tlc.set(0s, xxx);
+// Tlc.update();
+// xxx++;
+ //delay(5000);
+/**
+ */
+
+/*
+  //stepper.run();
+  //stepper.runSpeed();
+
+  //if (extend > 2000) {
+  //  digitalWrite(TIP_EXTEND_DIR, HIGH);
+  //} else {
+    digitalWrite(TIP_EXTEND_DIR, LOW);
+  //}
+  if (extend < 3300) {
+    digitalWrite(TIP_EXTEND_STEP, HIGH);
+    delayMicroseconds(1);
+    digitalWrite(TIP_EXTEND_STEP, LOW);
+    delayMicroseconds(1);
+    extend++;
+  }
+  */
+
+  /** 
+   * And_NeutrinoWandBarGraph is smart enough to know that 
+   * it only needs to begin() once, so it is safe here
+   * in loop().
+   */
   bargraph.begin(currentTime);
+
+  //if (switchOn(NFILTER_CRTL)) {
+
+  
 
   if (switchOn(ACTIVATE_BTN)) {
     if (! activate_switch) {
@@ -328,10 +555,12 @@ void loop() {
 
     firingPeriod = (currentTime - timeActivateStart);
 
+    openFiringStream(firingPeriod);
+
     /**
-       @todo
-       Add a "venting" sequence to the bargraph?
-    */
+     * @todo
+     * Add a "venting" sequence to the bargraph?
+     */
 
     if (firingPeriod > 5000 && firingPeriod < 10999) {
       bargraph.setSpeed(And_NeutrinoWandBarGraph::SPEED_NOMINAL);
@@ -348,12 +577,18 @@ void loop() {
     activate_switch = false;
     bargraph.setSpeed(And_NeutrinoWandBarGraph::SPEED_IDLE);
     bargraph.idle(currentTime);
+
   }
+  
+  //playSoundEffect(packHumTrack, false);
+  //delay(5000);
 
   if (switchOn(POWER_BTN)) {
 
     if (hasBooted) {
       powerCellCycle(currentTime, justBooted);
+      
+      playSoundEffect(packHumTrack, false);
 
       switch (currentCyclotronLight) {
         case 0:
@@ -375,6 +610,8 @@ void loop() {
       if (! power_switch) {
         bootStartTime = currentTime;
         power_switch = true;
+        Serial.println("Power Switch ON");
+        playSoundEffect(packBootTrack, false);
       }
 
       hasBooted = powerBootUpSequence(currentTime, bootStartTime);
@@ -385,6 +622,7 @@ void loop() {
     }
 
   } else {
+    
     if (power_switch) {
       shutdownStartTime = currentTime;
       isShuttingDown = true;
