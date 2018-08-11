@@ -8,11 +8,13 @@
 #include <And_NeutrinoWandBarGraph.h>
 #include <And_RGBLed.h>
 
+#define TIME_FIRING_BEFORE_OVERHEAT 25000
+
 /**
- * Connect these I/O pins to GND. Use the
- * switchOn() method to abstract reading
- * their state.
- */
+   Connect these I/O pins to GND. Use the
+   switchOn() method to abstract reading
+   their state.
+*/
 #define POWER_BTN 32
 #define SAFETY_BTN 31
 #define ACTIVATE_BTN 33
@@ -21,41 +23,57 @@
 #define LEVER_BTN 56
 #define STRIP_N 16
 #define STRIP_PIN 22
+#define JEWEL_N 7
+#define JEWEL_PIN 23
 
 /**
- * Pack Modes, inspired by the Video Game:
- * Default (Proton) stream, Stasis stream, Slime blower
- * and Maximum Proton stream (use for crossing the
- * streams?)
- */
+   Pack Modes, inspired by the Video Game:
+   Default (Proton) stream, Stasis stream, Slime blower
+   and Maximum Proton stream (use for crossing the
+   streams?)
+*/
 #define PROTON_MODE 0
 #define SLIME_MODE 1
 #define STASIS_MODE 2
 #define MAX_PROTON_MODE 3
 
 /**
- * The N-Filter vent consists of a 12V fan,
- * a 12V multi-directional LED lamp, and a
- * 9-12V e-cig kit. These are switched via
- * a double Relay module.
- *
- * @TODO
- * Should the fan + e-cig be synched, or
- * the light + fan?
- */
+   The N-Filter vent consists of a 12V fan,
+   a 12V multi-directional LED lamp, and a
+   9-12V e-cig kit. These are switched via
+   a double Relay module.
+
+   @TODO
+   Should the fan + e-cig be synched, or
+   the light + fan?
+*/
 #define NFILTER_FAN 46
 #define NFILTER_VENT_EXHAUST 47
 
+/**
+   @TODO decide on I/O pins for the Neutrino wand
+   lights.
+   VENT_HAT       Top Hat light (WHITE LED) On / Off
+   EAR_HAT        Orange Hat light (RGB LED) Orange / Green / Blue
+   CLIPPARD_HAT   Hat light next to Clippard Minimatic (WHITE LED) On / Off
+   TOP_LIGHT      Smaller top light (WHITE LED) On / Off
+   SLOBLO_LIGHT   Small light near the SloBlo fusebox (RED LED) On / Off
+*/
+#define VENT_HAT 0
+#define EAR_HAT 0
+#define CLIPPARD_HAT 0
+#define TOP_LIGHT 0
+#define SLOBLO_LIGHT 0
 
 #define TIP_EXTEND_DIR 11
 #define TIP_EXTEND_STEP 12
 
 /**
- * We are using a SparkFun SX1509 breakout
- * board to drive the Neutrino Wand bargraph,
- * which is an array of 3 x 5 LED bargraphs
- * since those are the very readily available.
- */
+   We are using a SparkFun SX1509 breakout
+   board to drive the Neutrino Wand bargraph,
+   which is an array of 3 x 5 LED bargraphs
+   since those are the very readily available.
+*/
 const int SX1509_BG_LED_1 = 0;
 const int SX1509_BG_LED_2 = 1;
 const int SX1509_BG_LED_3 = 2;
@@ -79,13 +97,13 @@ const int SX1509_BG_LED_15 = 14;
 #define SFX_RX 15
 
 /**
- * Since SX1509 breakouts can be chained, you need
- * to set each board's address when communicating
- * with it. The default for one board in 0x3E.
- * We'll also load the boards I/O pins into an
- * array so that we can ass it to our library class
- * And_NeutrinoWandBarGraph
- */
+   Since SX1509 breakouts can be chained, you need
+   to set each board's address when communicating
+   with it. The default for one board in 0x3E.
+   We'll also load the boards I/O pins into an
+   array so that we can ass it to our library class
+   And_NeutrinoWandBarGraph
+*/
 const byte SX1509_ADDRESS = 0x3E;
 
 SX1509 bargraphPinsIO;
@@ -115,37 +133,43 @@ And_NeutrinoWandBarGraph bargraph = And_NeutrinoWandBarGraph();
 #define CYCLOTRON_3_PIN_B 1
 
 /**
- * The power strip will be made from two Adafruit
- * NeoPixel strips chained together.
- */
+   The power strip will be made from two Adafruit
+   NeoPixel strips chained together.
+*/
 Adafruit_NeoPixel strip = Adafruit_NeoPixel(STRIP_N, STRIP_PIN, NEO_GRB + NEO_KHZ800);
 
 /**
- * Since we are using a Mega, we will use the hardware
- * Serial1 on pins 18 & 19 to control the Adafruit
- * Audio FX Soundboard. If your Arduino doesn't have
- * hardware serial avaiable, you'll have to use the
- * SoftwareSerial alternative:
- *
- * #include <SoftwareSerial.h>
- * SoftwareSerial ss = SoftwareSerial(SFX_TX, SFX_RX);
- */
+   Use a 7 LED NeoPixel Jewel to light the tip of the
+   Neutrino Wand.
+*/
+Adafruit_NeoPixel jewel = Adafruit_NeoPixel(JEWEL_N, JEWEL_PIN, NEO_GRB + NEO_KHZ800);
+
+/**
+   Since we are using a Mega, we will use the hardware
+   Serial1 on pins 18 & 19 to control the Adafruit
+   Audio FX Soundboard. If your Arduino doesn't have
+   hardware serial avaiable, you'll have to use the
+   SoftwareSerial alternative:
+
+   #include <SoftwareSerial.h>
+   SoftwareSerial ss = SoftwareSerial(SFX_TX, SFX_RX);
+*/
 Adafruit_Soundboard sfx = Adafruit_Soundboard(&Serial1, NULL, SFX_RST);
 
 AccelStepper stepper = AccelStepper(AccelStepper::DRIVER, TIP_EXTEND_STEP, TIP_EXTEND_DIR);
 
 /**
- * 11-character file name (8.3 without the dot).
- * If the filename is shorter than 8 characters,
- * fill the characters.
- * @see https://learn.adafruit.com/adafruit-audio-fx-sound-board/serial-audio-control
- *
- * Here are the Sound Effect files required,
- * you'll need a 16Mb Adafruit Audio FX to fit
- * these many sounds. The SFX themselves can
- * be sourced from the Video Game. Use .WAV to
- * minimise the delay from decoding OGG.
- */
+   11-character file name (8.3 without the dot).
+   If the filename is shorter than 8 characters,
+   fill the characters.
+   @see https://learn.adafruit.com/adafruit-audio-fx-sound-board/serial-audio-control
+
+   Here are the Sound Effect files required,
+   you'll need a 16Mb Adafruit Audio FX to fit
+   these many sounds. The SFX themselves can
+   be sourced from the Video Game. Use .WAV to
+   minimise the delay from decoding OGG.
+*/
 char packBootTrack[]      = "T00     WAV";
 char packHumTrack[]       = "T01     WAV";
 char fireStartTrack[]     = "T02     WAV";
@@ -166,16 +190,17 @@ char maxFireLoopTrack[]   = "T16     WAV";
 char maxFireEndTrack[]    = "T17     WAV";
 char shutdownTrack[]      = "T18     WAV";
 char powerOffTrack[]      = "T19     WAV";
+char fullOverheatTrack[]  = "T20     WAV";
 
 int packFiringMode;
 
 /**
- * @desc Return a randomised named Stream Start track
- *       from the list available.
- */
-char* getRandomStreamStartTrack(){
+   @desc Return a randomised named Stream Start track
+         from the list available.
+*/
+char* getRandomStreamStartTrack() {
   int r = random(0, 3);
-  switch(r) {
+  switch (r) {
     case 1:
       return fireStart2Track;
     case 2:
@@ -186,22 +211,22 @@ char* getRandomStreamStartTrack(){
 }
 
 /**
- * @desc Return a randomised named Stream Loop track
- *       from the list available.
- */
-char* getRandomStreamTrack(){
+   @desc Return a randomised named Stream Loop track
+         from the list available.
+*/
+char* getRandomStreamTrack() {
   // @TODO:
   // Currently only using one fireLoop SFX
   return fireLoopTrack;
 }
 
 /**
- * @desc Return a randomised named Stream End track
- *       from the list available.
- */
-char* getRandomStreamEndTrack(){
+   @desc Return a randomised named Stream End track
+         from the list available.
+*/
+char* getRandomStreamEndTrack() {
   int r = random(0, 2);
-  switch(r) {
+  switch (r) {
     case 1:
       return fireEnd2Track;
     default: // 0, because random()'s MAX is exclusive
@@ -210,18 +235,18 @@ char* getRandomStreamEndTrack(){
 }
 
 /**
- * @desc Function to call to open a firing stream. Will
- *       always take into consideration the pack's
- *       current Firing Mode and play the appropriate
- *       sound effect.
- */
+   @desc Function to call to open a firing stream. Will
+         always take into consideration the pack's
+         current Firing Mode and play the appropriate
+         sound effect.
+*/
 void openFiringStream(long timeSinceStart) {
 
   long now = millis();
   uint32_t remain, total;
 
   if (millis == now) {
-    switch(packFiringMode) {
+    switch (packFiringMode) {
       case SLIME_MODE:
         playSoundEffect(slimeStartTrack, true);
         break;
@@ -233,20 +258,20 @@ void openFiringStream(long timeSinceStart) {
         break;
       default: // PROTON MODE
         /**
-         * If we've only just started firing, play a randomised
-         * Stream start up sound effect.
-         */
+           If we've only just started firing, play a randomised
+           Stream start up sound effect.
+        */
         playSoundEffect(getRandomStreamStartTrack(), true);
     }
   } else {
 
     /**
-     * If we are unable to query the play duration, OR
-     * the effect is about to stop, queue up the next
-     * sound effect.
-     */
+       If we are unable to query the play duration, OR
+       the effect is about to stop, queue up the next
+       sound effect.
+    */
     if (! sfx.trackSize(&remain, &total) || total - remain <= 3) {
-      switch(packFiringMode) {
+      switch (packFiringMode) {
         case STASIS_MODE:
           playSoundEffect(stasisLoopTrack, true);
           break;
@@ -258,11 +283,11 @@ void openFiringStream(long timeSinceStart) {
           break;
         default:
           /**
-           * Any of the stream loops should seamlessly loop
-           * with any other, so we don't need to keep track
-           * of which track is randomly picked. This should
-           * make for a more organic stream effect.
-           */
+             Any of the stream loops should seamlessly loop
+             with any other, so we don't need to keep track
+             of which track is randomly picked. This should
+             make for a more organic stream effect.
+          */
           playSoundEffect(getRandomStreamTrack(), false);
       }
     }
@@ -275,6 +300,7 @@ bool invert;
 bool hasBooted;
 bool justBooted;
 bool isShuttingDown;
+bool isOverheating;
 
 bool power_switch;
 bool activate_switch;
@@ -313,13 +339,13 @@ void resetStripLED() {
 }
 
 /**
- * @desc During the boot sequence the animation of the
- *       power strip is different. Each LED will "fall"
- *       from one end to the other, producing a filling
- *       stack effect.
- * @return bool Returns TRUE once the full animation is
- *       complete, otherwise FALSE.
- */
+   @desc During the boot sequence the animation of the
+         power strip is different. Each LED will "fall"
+         from one end to the other, producing a filling
+         stack effect.
+   @return bool Returns TRUE once the full animation is
+         complete, otherwise FALSE.
+*/
 bool powerBootUpSequence(long currentTime, long startTime) {
 
   int _speed = 30.0;
@@ -363,11 +389,12 @@ bool powerBootUpSequence(long currentTime, long startTime) {
 }
 
 /**
- * @desc During a power cell cycle, each light will light
- *       in a chase until all LEDs are lit, then they
- *       are immediately all reset to OFF.
- */
-void powerCellCycle(long currentTime, bool _init) {\
+   @desc During a power cell cycle, each light will light
+         in a chase until all LEDs are lit, then they
+         are immediately all reset to OFF.
+*/
+void powerCellCycle(long currentTime, bool _init) {
+  \
 
   int _speed = 30.0;
 
@@ -398,13 +425,13 @@ void powerCellCycle(long currentTime, bool _init) {\
 }
 
 /**
- * @desc On power down, the animation on the 16 LED
- *       NeoPixel strip is thus:
- *       All lights are lit at once, and then all
- *       fade to off over the duration variable.
- * @return bool Returns TRUE once the animation is complete,
- *       otherwise FALSE.
- */
+   @desc On power down, the animation on the 16 LED
+         NeoPixel strip is thus:
+         All lights are lit at once, and then all
+         fade to off over the duration variable.
+   @return bool Returns TRUE once the animation is complete,
+         otherwise FALSE.
+*/
 bool powerCellShutdown(long currentTime, long startTime) {
 
   long duration = 1500.0;
@@ -424,21 +451,29 @@ bool powerCellShutdown(long currentTime, long startTime) {
 
 
 
-/** 
- * @desc Fill the dots one after the other with a color
- * @deprecated?
- */
+/**
+   @desc Fill the dots one after the other with a color
+   @deprecated?
+*/
 void lightStripLED(uint32_t n, uint32_t color) {
   strip.setPixelColor(n, color);
   strip.show();
 }
 
 /**
- * @desc Reset the states of the N-Filter I/O
- */
+   @desc Reset the states of the N-Filter I/O
+*/
 void NFilterReset() {
   digitalWrite(NFILTER_FAN, HIGH);
   digitalWrite(NFILTER_VENT_EXHAUST, HIGH);
+}
+
+/**
+   @desc Reset the states of the N-Filter I/O
+*/
+void NFilterVent() {
+  digitalWrite(NFILTER_FAN, LOW);
+  digitalWrite(NFILTER_VENT_EXHAUST, LOW);
 }
 
 void setup() {
@@ -450,7 +485,7 @@ void setup() {
   Serial1.begin(9600);
 
   if (!sfx.reset()) {
-  //  Serial.println("SFX board Not found");
+    //  Serial.println("SFX board Not found");
     while (1);
   }
 
@@ -460,6 +495,10 @@ void setup() {
   pinMode(NFILTER_VENT_EXHAUST, OUTPUT);
   NFilterReset();
 
+  /**
+     Initialize the I/O pins for switches and
+     controls on the Neutrino Wand.
+  */
   pinMode(POWER_BTN, INPUT_PULLUP);
   digitalWrite(POWER_BTN, HIGH);
 
@@ -472,6 +511,29 @@ void setup() {
   pinMode(MODE_BTN, INPUT_PULLUP);
   digitalWrite(MODE_BTN, HIGH);
 
+  /**
+     Initialize the I/O pins we'll be using for the
+     Neutrino Wand LEDs / hat lights
+  */
+  pinMode(EAR_HAT, OUTPUT);
+  digitalWrite(EAR_HAT, LOW);
+
+  pinMode(TOP_LIGHT, OUTPUT);
+  digitalWrite(TOP_LIGHT, LOW);
+
+  pinMode(VENT_HAT, OUTPUT);
+  digitalWrite(VENT_HAT, LOW);
+
+  pinMode(CLIPPARD_HAT, OUTPUT);
+  digitalWrite(CLIPPARD_HAT, LOW);
+
+  /**
+     SLOBLO Light will always be lit, so it can be used
+     to tell if power is being supplied to the arduino
+     even if the in-universe power button is OFF
+  */
+  pinMode(SLOBLO_LIGHT, OUTPUT);
+  digitalWrite(SLOBLO_LIGHT, HIGH);
 
   pinMode(TIP_EXTEND_STEP, OUTPUT);
   pinMode(TIP_EXTEND_DIR, OUTPUT);
@@ -480,15 +542,15 @@ void setup() {
 
   Tlc.init();
 
-/*
-  stepper.setMaxSpeed(1000);
-  stepper.setSpeed(50);
-  //stepper.moveTo(5000);
-*/
-//  pinMode(ACT, INPUT);
+  /*
+    stepper.setMaxSpeed(1000);
+    stepper.setSpeed(50);
+    //stepper.moveTo(5000);
+  */
+  //  pinMode(ACT, INPUT);
 
   //pinMode(SFX_RST, OUTPUT);
- //digitalWrite(SFX_RST, LOW);
+  //digitalWrite(SFX_RST, LOW);
 
   if (! bargraphPinsIO.begin(SX1509_ADDRESS)) {
     //    // If we failed to communicate, turn the pin 13 LED on
@@ -500,6 +562,10 @@ void setup() {
   bargraph.setPowerLevel(3);
   bargraph.setSpeed(And_NeutrinoWandBarGraph::SPEED_NOMINAL);
 
+  /**
+     Variables to track whether an event has just happened
+     this loop() cycle.
+  */
   power_switch = false;
   activate_switch = false;
   intensify_switch = false;
@@ -507,6 +573,7 @@ void setup() {
   lever_switch = false;
 
   hasBooted = false;
+  isOverheating = false;
 
   strip.begin();
   strip.show(); // Initialize all pixels to 'off'
@@ -533,6 +600,18 @@ void playSoundEffect(char* track, bool _stop) {
   }
 }
 
+void animateStreamTip(long currentTime) {
+
+}
+
+void animateStasisTip(long currentTime) {
+
+}
+
+void animateSlimeTip(long currentTime) {
+
+}
+
 void cyclotronAnimate(int in, int out) {
   // @TODO
 }
@@ -543,53 +622,107 @@ void cyclotronLight(int i, int r, int g, int b) {
 
 int extend = 0;
 
+/**
+   @desc Begin the overheat warning routine. Return
+         TRUE if proton pack has overheated and
+         rebooted, otherwise FALSE.
+   @param long firingPeriod
+   @return bool
+*/
+bool overheatWarning(long firingPeriod) {
+  // @TODO
+
+  uint32_t remain, total, progress;
+  long warningPeriod = TIME_FIRING_BEFORE_OVERHEAT - firingPeriod;
+
+  if (! isOverheating) {
+    NFilterReset();
+    playSoundEffect(fullOverheatTrack, true);
+    progress = 0;
+  } else if (sfx.trackSize(&remain, &total)) {
+    progress = total - remain;
+  }
+
+  isOverheating = true;
+
+  /**
+     In warning cycle, flash the hat light next to the
+     vent on and off rappidly every 500 ms
+  */
+  if (warningPeriod % 1000 >= 500) {
+    // Vent Hat light OFF
+    digitalWrite(VENT_HAT, LOW);
+  } else {
+    // Vent Hat light ON
+    digitalWrite(VENT_HAT, HIGH);
+  }
+
+
+  if (progress > 10000) {
+    // 10 Seconds in to the soundeffect...
+    // If SFX has reached reset point, start NFilter Vent
+    NFilterVent();
+  }
+
+
+  if (remain <= 1) {
+    // Overheat and Vent cycle complete, return TRUE to
+    // signal reset
+    NFilterReset();
+    isOverheating = false;
+    return true;
+  }
+
+  return false;
+}
+
 void loop() {
   // put your main code here, to run repeatedly:
   unsigned long currentTime = millis();
   unsigned long firingPeriod;
 
-// if (xxx >= 4095) {
-//  xxx = 0;
-// }
-//xxx = 4095;
-// Tlc.clear();
-// Tlc.set(0s, xxx);
-// Tlc.update();
-// xxx++;
- //delay(5000);
-/**
- */
-
-/*
-  //stepper.run();
-  //stepper.runSpeed();
-
-  //if (extend > 2000) {
-  //  digitalWrite(TIP_EXTEND_DIR, HIGH);
-  //} else {
-    digitalWrite(TIP_EXTEND_DIR, LOW);
-  //}
-  if (extend < 3300) {
-    digitalWrite(TIP_EXTEND_STEP, HIGH);
-    delayMicroseconds(1);
-    digitalWrite(TIP_EXTEND_STEP, LOW);
-    delayMicroseconds(1);
-    extend++;
-  }
+  // if (xxx >= 4095) {
+  //  xxx = 0;
+  // }
+  //xxx = 4095;
+  // Tlc.clear();
+  // Tlc.set(0s, xxx);
+  // Tlc.update();
+  // xxx++;
+  //delay(5000);
+  /**
   */
 
-  /** 
-   * And_NeutrinoWandBarGraph is smart enough to know that 
-   * it only needs to begin() once, so it is safe here
-   * in loop().
-   */
+  /*
+    //stepper.run();
+    //stepper.runSpeed();
+
+    //if (extend > 2000) {
+    //  digitalWrite(TIP_EXTEND_DIR, HIGH);
+    //} else {
+      digitalWrite(TIP_EXTEND_DIR, LOW);
+    //}
+    if (extend < 3300) {
+      digitalWrite(TIP_EXTEND_STEP, HIGH);
+      delayMicroseconds(1);
+      digitalWrite(TIP_EXTEND_STEP, LOW);
+      delayMicroseconds(1);
+      extend++;
+    }
+  */
+
+  /**
+     And_NeutrinoWandBarGraph is smart enough to know that
+     it only needs to begin() once, so it is safe here
+     in loop().
+  */
   bargraph.begin(currentTime);
 
-  
+
   /**
-   * Check the switch position of the Activate Button to
-   * see if the Neutrino Wand needs to fire a stream
-   */
+     Check the switch position of the Activate Button to
+     see if the Neutrino Wand needs to fire a stream
+  */
   if (switchOn(ACTIVATE_BTN)) {
     if (! activate_switch) {
       timeActivateStart = currentTime;
@@ -601,9 +734,9 @@ void loop() {
     openFiringStream(firingPeriod);
 
     /**
-     * @todo
-     * Add a "venting" sequence to the bargraph?
-     */
+       @todo
+       Add a "venting" sequence to the bargraph?
+    */
 
     if (firingPeriod > 5000 && firingPeriod < 10999) {
       bargraph.setSpeed(And_NeutrinoWandBarGraph::SPEED_NOMINAL);
@@ -616,25 +749,43 @@ void loop() {
     }
 
     bargraph.activate(currentTime);
+
+    /**
+       We are going to trigger the overheat warning routine
+    */
+    if (isOverheating || firingPeriod > TIME_FIRING_BEFORE_OVERHEAT) {
+
+      if (overheatWarning(firingPeriod)) {
+
+        activate_switch = false;
+
+      }
+
+    }
+
   } else {
     activate_switch = false;
     bargraph.setSpeed(And_NeutrinoWandBarGraph::SPEED_IDLE);
     bargraph.idle(currentTime);
-
   }
-  
+
   //playSoundEffect(packHumTrack, false);
   //delay(5000);
 
   /**
-   * Check the position of the Power Button to see if
-   * the Proton Pack is powered
-   */
+     Check the position of the Power Button to see if
+     the Proton Pack is powered
+  */
   if (switchOn(POWER_BTN)) {
+
+    digitalWrite(CLIPPARD_HAT, HIGH);
+    digitalWrite(TOP_LIGHT, HIGH);
+    digitalWrite(VENT_HAT, HIGH);
+    digitalWrite(EAR_HAT, HIGH);
 
     if (hasBooted) {
       powerCellCycle(currentTime, justBooted);
-      
+
       playSoundEffect(packHumTrack, false);
 
       switch (currentCyclotronLight) {
@@ -669,12 +820,17 @@ void loop() {
     }
 
   } else {
-    
+
     if (power_switch) {
       shutdownStartTime = currentTime;
       isShuttingDown = true;
       power_switch = false;
       hasBooted = false;
+
+      digitalWrite(CLIPPARD_HAT, LOW);
+      digitalWrite(TOP_LIGHT, LOW);
+      digitalWrite(VENT_HAT, LOW);
+      digitalWrite(EAR_HAT, LOW);
     }
 
     if (isShuttingDown) {
