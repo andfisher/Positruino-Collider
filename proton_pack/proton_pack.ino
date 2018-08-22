@@ -6,6 +6,7 @@
 #include <Adafruit_NeoPixel.h>
 #include <Adafruit_Soundboard.h>
 #include <And_NeutrinoWandBarGraph.h>
+#include <And_NeutrinoWandTip.h>
 #include <And_RGBLed.h>
 
 #define TIME_FIRING_BEFORE_OVERHEAT 25000
@@ -25,17 +26,6 @@
 #define STRIP_PIN 22
 #define JEWEL_N 7
 #define JEWEL_PIN 23
-
-/**
-   Pack Modes, inspired by the Video Game:
-   Default (Proton) stream, Stasis stream, Slime blower
-   and Maximum Proton stream (use for crossing the
-   streams?)
-*/
-#define PROTON_MODE 0
-#define SLIME_MODE 1
-#define STASIS_MODE 2
-#define MAX_PROTON_MODE 3
 
 /**
    The N-Filter vent consists of a 12V fan,
@@ -67,6 +57,13 @@
 
 #define TIP_EXTEND_DIR 11
 #define TIP_EXTEND_STEP 12
+
+/**
+ * Numbered R,G,B pins for the tip light
+ */
+#define TIP_LIGHT_R 0
+#define TIP_LIGHT_G 0
+#define TIP_LIGHT_B 0
 
 /**
    We are using a SparkFun SX1509 breakout
@@ -138,11 +135,7 @@ And_NeutrinoWandBarGraph bargraph = And_NeutrinoWandBarGraph();
 */
 Adafruit_NeoPixel strip = Adafruit_NeoPixel(STRIP_N, STRIP_PIN, NEO_GRB + NEO_KHZ800);
 
-/**
-   Use a 7 LED NeoPixel Jewel to light the tip of the
-   Neutrino Wand.
-*/
-Adafruit_NeoPixel jewel = Adafruit_NeoPixel(JEWEL_N, JEWEL_PIN, NEO_GRB + NEO_KHZ800);
+And_NeutrinoWandTip neutrinoWandTip;
 
 /**
    Since we are using a Mega, we will use the hardware
@@ -476,6 +469,22 @@ void NFilterVent() {
   digitalWrite(NFILTER_VENT_EXHAUST, LOW);
 }
 
+/**
+ * @desc Setup the wand tip object
+ */
+void setupNeutrinoWandTip() {
+
+  And_RGBLed tipLight = And_RGBLed(AND_COMMON_ANODE, TIP_LIGHT_R, TIP_LIGHT_G, TIP_LIGHT_B);
+  
+  /**
+     Use a 7 LED NeoPixel Jewel to light the tip of the
+     Neutrino Wand.
+  */
+  Adafruit_NeoPixel jewel = Adafruit_NeoPixel(JEWEL_N, JEWEL_PIN, NEO_GRB + NEO_KHZ800);
+
+  neutrinoWandTip.begin(tipLight, jewel);
+}
+
 void setup() {
   // put your setup code here, to run once:
   Serial.begin(9600);
@@ -490,6 +499,8 @@ void setup() {
   }
 
   soundTest = 1;
+
+  setupNeutrinoWandTip();
 
   pinMode(NFILTER_FAN, OUTPUT);
   pinMode(NFILTER_VENT_EXHAUST, OUTPUT);
