@@ -59,8 +59,8 @@
 #define TIP_EXTEND_STEP 12
 
 /**
- * Numbered R,G,B pins for the tip light
- */
+   Numbered R,G,B pins for the tip light
+*/
 #define TIP_LIGHT_R 0
 #define TIP_LIGHT_G 0
 #define TIP_LIGHT_B 0
@@ -129,11 +129,20 @@ And_NeutrinoWandBarGraph bargraph = And_NeutrinoWandBarGraph();
 #define CYCLOTRON_3_PIN_G 1
 #define CYCLOTRON_3_PIN_B 1
 
+#define VENT_GRILL_N 4
+#define VENT_GRILL_PIN 0 // @TODO
+
 /**
    The power strip will be made from two Adafruit
    NeoPixel strips chained together.
 */
 Adafruit_NeoPixel strip = Adafruit_NeoPixel(STRIP_N, STRIP_PIN, NEO_GRB + NEO_KHZ800);
+
+/**
+   The Vent Grill light will be an array of 4 standalone
+   Neopixels chained together
+*/
+Adafruit_NeoPixel ventGrill = Adafruit_NeoPixel(VENT_GRILL_N, VENT_GRILL_PIN, NEO_GRB + NEO_KHZ800);
 
 And_NeutrinoWandTip neutrinoWandTip;
 
@@ -470,12 +479,32 @@ void NFilterVent() {
 }
 
 /**
- * @desc Setup the wand tip object
- */
+   @desc Turn on the Vent Grill NeoPixel array
+*/
+void ventGrillOn() {
+  for (int i = 0; i < VENT_GRILL_N; i++) {
+    ventGrill.setPixelColor(i, neopixel_white);
+  }
+  ventGrill.show();
+}
+
+/**
+   @desc Turn on the Vent Grill NeoPixel array
+*/
+void ventGrillOff() {
+  for (int i = 0; i < VENT_GRILL_N; i++) {
+    ventGrill.setPixelColor(i, neopixel_black);
+  }
+  ventGrill.show();
+}
+
+/**
+   @desc Setup the wand tip object
+*/
 void setupNeutrinoWandTip() {
 
   And_RGBLed tipLight = And_RGBLed(AND_COMMON_ANODE, TIP_LIGHT_R, TIP_LIGHT_G, TIP_LIGHT_B);
-  
+
   /**
      Use a 7 LED NeoPixel Jewel to light the tip of the
      Neutrino Wand.
@@ -588,6 +617,9 @@ void setup() {
 
   strip.begin();
   strip.show(); // Initialize all pixels to 'off'
+
+  ventGrill.begin();
+  ventGrill.show();
 
   neopixel_red = strip.Color(255, 0, 0);
   neopixel_green = strip.Color(0, 255, 0);
@@ -789,11 +821,6 @@ void loop() {
   */
   if (switchOn(POWER_BTN)) {
 
-    digitalWrite(CLIPPARD_HAT, HIGH);
-    digitalWrite(TOP_LIGHT, HIGH);
-    digitalWrite(VENT_HAT, HIGH);
-    digitalWrite(EAR_HAT, HIGH);
-
     if (hasBooted) {
       powerCellCycle(currentTime, justBooted);
 
@@ -820,6 +847,13 @@ void loop() {
         bootStartTime = currentTime;
         power_switch = true;
         Serial.println("Power Switch ON");
+
+        ventGrillOn();
+        digitalWrite(CLIPPARD_HAT, HIGH);
+        digitalWrite(TOP_LIGHT, HIGH);
+        digitalWrite(VENT_HAT, HIGH);
+        digitalWrite(EAR_HAT, HIGH);
+
         playSoundEffect(packBootTrack, false);
       }
 
@@ -838,6 +872,7 @@ void loop() {
       power_switch = false;
       hasBooted = false;
 
+      ventGrillOff();
       digitalWrite(CLIPPARD_HAT, LOW);
       digitalWrite(TOP_LIGHT, LOW);
       digitalWrite(VENT_HAT, LOW);
